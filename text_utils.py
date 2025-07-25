@@ -32,13 +32,16 @@ def text_standardize(text):
     text = re.sub(r'[^\S\n]+', ' ', text)
     return text.strip()
 
+import warnings
+warnings.filterwarnings("ignore")
+
 class TextEncoder(object):
     """
     mostly a wrapper for a public python bpe tokenizer
     """
 
     def __init__(self, encoder_path, bpe_path):
-        self.nlp = spacy.load('en', disable=['parser', 'tagger', 'ner', 'textcat'])
+        self.nlp = spacy.load('en_core_web_sm', disable=['parser', 'tagger', 'ner', 'textcat'])
         self.encoder = json.load(open(encoder_path))
         self.decoder = {v:k for k,v in self.encoder.items()}
         merges = open(bpe_path, encoding='utf-8').read().split('\n')[1:-1]

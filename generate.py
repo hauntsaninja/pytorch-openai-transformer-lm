@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import subprocess
 
 import numpy as np
 import torch
@@ -56,8 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--opt', type=str, default='adam')
     parser.add_argument('--afn', type=str, default='gelu')
     parser.add_argument('--lr_schedule', type=str, default='warmup_linear')
-    parser.add_argument('--encoder_path', type=str, default='model/encoder_bpe_40000.json')
-    parser.add_argument('--bpe_path', type=str, default='model/vocab_40000.bpe')
+    parser.add_argument('--encoder_path', type=str, default=None)
+    parser.add_argument('--bpe_path', type=str, default=None)
     parser.add_argument('--n_transfer', type=int, default=12)
     parser.add_argument('--lm_coef', type=float, default=0.5)
     parser.add_argument('--b1', type=float, default=0.9)
@@ -66,9 +67,24 @@ if __name__ == '__main__':
     parser.add_argument('--n_valid', type=int, default=374)
     parser.add_argument('--gen_len', type=int, default=20)
     parser.add_argument('--topk', type=int, default=10)
+    parser.add_argument('--temperature', type=float, default=1.0)
+    parser.add_argument('--prompt', type=str, default='')
 
     args = parser.parse_args()
-    print(args)
+
+    if args.seed == -1:
+        args.seed = random.randint(0, 1000000)
+
+
+    ftlm_path = os.path.join(os.path.dirname(__file__), 'model', 'finetune-transformer-lm')
+    model_path = os.path.join(ftlm_path, 'model')
+    if not os.path.exists(model_path):
+        subprocess.run(['git', 'clone', 'https://github.com/openai/finetune-transformer-lm.git', ftlm_path])
+
+    if args.encoder_path is None:
+        args.encoder_path = os.path.join(model_path, 'encoder_bpe_40000.json')
+    if args.bpe_path is None:
+        args.bpe_path = os.path.join(model_path, 'vocab_40000.bpe')
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -87,7 +103,6 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     n_gpu = torch.cuda.device_count()
-    print("device", device, "n_gpu", n_gpu)
 
     text_encoder = TextEncoder(args.encoder_path, args.bpe_path)
     encoder = text_encoder.encoder
@@ -96,14 +111,18 @@ if __name__ == '__main__':
     n_special = 0   # XD: useless for language modeling task
     vocab = n_vocab + n_special + n_ctx
 
-    lm_model = LMModel(args, vocab, n_ctx, return_probs=True)
-    load_openai_pretrained_model(lm_model.transformer, n_ctx=n_ctx, n_special=n_special)
+    lm_model = LMModel(args, vocab, n_ctx, temperature=args.temperature, return_probs=True)
+    load_openai_pretrained_model(lm_model.transformer, n_ctx=n_ctx, n_special=n_special, path=model_path)
     lm_model.to(device)
 
     lm_model.eval()
 
-    text = input('Input some beginning words:')
-    while text != 'q':
+    if args.prompt:
+        text = args.prompt
+    else:
+        text = input('Input some beginning words:')
+
+    if True:
         X = text_encoder.encode([text,])
         XMB = make_batch(X)
 
@@ -119,4 +138,3 @@ if __name__ == '__main__':
             XMB = append_batch(XMB, next_idx)
 
         print()
-        text = input('Input some beginning words:')

@@ -274,8 +274,9 @@ class SimilarityHead(nn.Module):
 # XD
 class LMModel(nn.Module):
     """ Transformer with language model head only """
-    def __init__(self, cfg, vocab=40990, n_ctx=512, return_probs=False):
+    def __init__(self, cfg, vocab=40990, n_ctx=512, *, return_probs=False, temperature=1.0):
         super(LMModel, self).__init__()
+        self.temperature = temperature
         self.transformer = TransformerModel(cfg, vocab=vocab, n_ctx=n_ctx)
         self.lm_head = LMHead(self.transformer, cfg, trunc_and_reshape=False)
         self.return_probs = return_probs
@@ -289,7 +290,7 @@ class LMModel(nn.Module):
         h = self.transformer(x)
         lm_logits = self.lm_head(h)
         if self.return_probs:
-            lm_logits = F.softmax(lm_logits + self.pos_emb_mask, dim=-1)
+            lm_logits = F.softmax((lm_logits + self.pos_emb_mask) / self.temperature, dim=-1)
         return lm_logits
 
 
